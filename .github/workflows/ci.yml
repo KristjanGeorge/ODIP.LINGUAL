@@ -1,0 +1,188 @@
+name: CI — LingualParam-CSM™
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+env:
+  PYTHON_VERSION: "3.11"
+  NODE_VERSION: "20"
+
+jobs:
+  # ============================================================
+  # JOB 1: Lint y análisis estático Python (mypy + ruff)
+  # ============================================================
+  lint-python:
+    name: Lint Python (mypy + ruff)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Clonar repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: "pip"
+
+      - name: Instalar dependencias de desarrollo
+        working-directory: core
+        run: |
+          pip install --upgrade pip
+          pip install ".[dev]"
+
+      - name: Verificar tipos con mypy (strict)
+        working-directory: core
+        run: mypy lingualParam --ignore-missing-imports --strict
+
+      - name: Analizar estilo con ruff
+        working-directory: core
+        run: ruff check lingualParam
+
+  # ============================================================
+  # JOB 2: Tests Python con pytest + cobertura
+  # ============================================================
+  test-python:
+    name: Tests Python (pytest)
+    runs-on: ubuntu-latest
+    needs: lint-python
+
+    steps:
+      - name: Clonar repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: "pip"
+
+      - name: Instalar Open3D y dependencias
+        working-directory: core
+        run: |
+          pip install --upgrade pip
+          pip install ".[dev]"
+
+      - name: Ejecutar tests con pytest
+        working-directory: core
+        run: |
+          pytest tests/ \
+            --cov=lingualParam \
+            --cov-report=xml \
+            --cov-report=term-missing \
+            --cov-fail-under=70 \
+            -v
+
+      - name: Subir reporte de cobertura
+        uses: codecov/codecov-action@v4
+        if: always()
+        with:
+          file: core/coverage.xml
+          flags: python
+          name: lingualParam-python
+
+  # ============================================================
+  # JOB 3: Verificación de tipos TypeScript
+  # ============================================================
+  typecheck-ts:
+    name: TypeScript typecheck
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Clonar repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+
+      - name: Instalar dependencias npm
+        run: npm ci
+
+      - name: Verificar tipos TypeScript (renderer)
+        run: npx tsc --noEmit
+
+      - name: Verificar tipos TypeScript (electron)
+        run: npx tsc --noEmit -p tsconfig.electron.json
+
+  # ============================================================
+  # JOB 4: Build TypeScript + Vite
+  # ============================================================
+  build-ts:
+    name: Build TypeScript (Vite)
+    runs-on: ubuntu-latest
+    needs: typecheck-ts
+
+    steps:
+      - name: Clonar repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+
+      - name: Instalar dependencias npm
+        run: npm ci
+
+      - name: Build Vite
+        run: npx vite build
+
+      - name: Build Electron TS
+        run: npx tsc -p tsconfig.electron.json
+
+      - name: Subir artefactos de build
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ github.sha }}
+          path: |
+            dist/
+            dist-electron/
+          retention-days: 7
+
+  # ============================================================
+  # JOB 5: Package Electron (solo en main)
+  # ============================================================
+  package-electron:
+    name: Package Electron
+    runs-on: ${{ matrix.os }}
+    needs: [test-python, build-ts]
+    if: github.ref == 'refs/heads/main'
+
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - name: Clonar repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+
+      - name: Instalar dependencias npm
+        run: npm ci
+
+      - name: Build completo
+        run: npm run build
+
+      - name: Package con electron-builder
+        run: npx electron-builder --publish never
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Subir instaladores
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.os }}-${{ github.sha }}
+          path: release/
+          retention-days: 30

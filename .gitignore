@@ -1,0 +1,78 @@
+# LingualParam-CSM™ — .gitignore
+
+# ── Node / Electron ──────────────────────────────────────────────────
+node_modules/
+dist/
+dist-electron/
+release/
+*.local
+
+# ── Python ───────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+.eggs/
+.venv/
+venv/
+env/
+.env
+*.env.local
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+htmlcov/
+.coverage
+coverage.xml
+
+# ── Modelo CNN entrenado (binarios grandes, no se versionan aquí) ─────
+core/lingualParam/models/*.pt
+core/lingualParam/models/*.pth
+core/lingualParam/models/*.onnx
+
+# ── Base de datos local (datos clínicos — NUNCA al repo) ─────────────
+*.db
+*.sqlite
+*.sqlite3
+.odip_l/
+
+# ── Archivos clínicos exportados ─────────────────────────────────────
+exports/
+*.xlsx
+*.csv
+*.sql
+
+# ── Certificados y secretos ──────────────────────────────────────────
+*.p12
+*.pem
+*.key
+*.crt
+*.pfx
+ODIP_L_AES_KEY
+
+# ── Sistema operativo ────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── IDEs ─────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# ── Logs ─────────────────────────────────────────────────────────────
+*.log
+logs/
+
+# ── Build C++ (pybind11) ─────────────────────────────────────────────
+core/lingualParam/m7_bracket_cpp/build/
+*.o
+*.a
+*.lib
